@@ -9,3 +9,4 @@ streamlit-camera-input-live
 moviepy
 ipywidgets
 pyyaml
+ultralytics
