@@ -120,7 +120,7 @@ def prepare_data(image, input_layer):
     return input_image
 
 
-image = cv2.imread("images/test.jpg")
+image = cv2.imread("assets/sample.jpg")
 input_image = prepare_data(image, input_layer)
 print(np.shape(input_image))
 
@@ -288,7 +288,7 @@ def predict_image(image, conf_threshold):
         return image, inference_time
 
 
-mage = cv2.imread("images/test.jpg")
+mage = cv2.imread("assets/sample.jpg")
 conf_threshold = .15
 output_image,inference_time = predict_image(image, conf_threshold)
 
