@@ -7,3 +7,4 @@ openvino
 matplotlib
 streamlit-camera-input-live
 moviepy
+ipywidgets
