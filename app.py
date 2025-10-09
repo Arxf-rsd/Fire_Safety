@@ -1,77 +1,92 @@
 import streamlit as st
 import PIL
 import cv2
-import numpy
+import numpy as np
 import utils
 import io
 
+# ----------------------------
+# Streamlit page config
+# ----------------------------
+st.set_page_config(
+    page_title="Fire/Smoke Detection",
+    page_icon="🔥",
+    layout="centered",
+    initial_sidebar_state="expanded"
+)
+
+st.title("🔥 Fire/Smoke Detection App")
+
+# ----------------------------
+# Sidebar options
+# ----------------------------
+source_radio = st.sidebar.radio("Select Input Source:", ["IMAGE", "VIDEO", "WEBCAM"])
+
+conf_threshold = st.sidebar.slider(
+    "Confidence Threshold",
+    min_value=10, max_value=100, value=40, step=5
+) / 100
+
+# ----------------------------
+# Helper function for video
+# ----------------------------
 def play_video(video_source):
     camera = cv2.VideoCapture(video_source)
-
     st_frame = st.empty()
-    while(camera.isOpened()):
+
+    if not camera.isOpened():
+        st.error("Unable to open video source.")
+        return
+
+    while True:
         ret, frame = camera.read()
-
-        if ret:
-            visualized_image = utils.predict_image(frame, conf_threshold)
-            st_frame.image(visualized_image, channels = "BGR")
-
-        else:
-            camera.release()
+        if not ret:
             break
 
-st.set_page_config(
-    page_title="Age/Gender/Emotion",
-    page_icon=":sun_with_face:",
-    layout="centered",
-    initial_sidebar_state="expanded")
+        # Predict & visualize
+        visualized_image, _ = utils.predict_image(frame, conf_threshold)
+        st_frame.image(visualized_image, channels="BGR")
 
+    camera.release()
 
-st.title("Age/Gender/Emotion :sun_with_face:")
-
-st.sidebar.header("Type")
-source_radio = st.sidebar.radio("Select Source",["IMAGE", "VIDEO", "WEBCAM"])
-
-st.sidebar.header("Confidence")
-conf_threshold = float(st.sidebar.slider("Select the Confidence Threshold", 10,10,100,20))/100
-
-input = None
+# ----------------------------
+# IMAGE INPUT
+# ----------------------------
 if source_radio == "IMAGE":
-    st.sidebar.header("Upload")
-    input = st.sidebar.file_uploader("Choose an image", type=("jpg","png"))
-if input is not None:
-    uploaded_image = PIL.Image.open(input)
-    uploaded_image_cv = cv2.cvtColor(numpy.array(uploaded_image), cv2.COLOR_RGB2BGR)
-    visualized_image = utils.predict_image(uploaded_image_cv, conf_threshold = conf_threshold)
-    
-    st.image(visualized_image, channels ="BGR")
+    uploaded_file = st.sidebar.file_uploader("Upload an image", type=["jpg", "png"])
+    if uploaded_file:
+        uploaded_image = PIL.Image.open(uploaded_file)
+        uploaded_image_cv = cv2.cvtColor(np.array(uploaded_image), cv2.COLOR_RGB2BGR)
+        visualized_image, _ = utils.predict_image(uploaded_image_cv, conf_threshold)
+        st.image(visualized_image, channels="BGR")
+    else:
+        st.image("assets/sample.jpg")
+        st.write("Upload an image from the sidebar to run detection.")
 
-else:
-    st.image("assets/sample.jpg")
-    st.write("Click on 'Browse Files' in the sidebar to run inference on an image.")
+# ----------------------------
+# VIDEO INPUT
+# ----------------------------
+elif source_radio == "VIDEO":
+    uploaded_file = st.sidebar.file_uploader("Upload a video", type=["mp4"])
+    temp_video_path = None
 
-temporary_location = None
-if source_radio == "VIDEO":
-    st.sidebar.header("Upload")
-    input = st.sidebar.file_uploader("Choose an video", type=("mp4"))
+    if uploaded_file:
+        # Save uploaded video to temp file
+        temp_video_path = "temp_upload.mp4"
+        with open(temp_video_path, "wb") as f:
+            f.write(uploaded_file.read())
 
-    if input is not None:
-        g = io.BytesIO(input.read())
-        temporary_location = "upload.mp4"
-
-        with open(temporary_location, "wb") as out:
-            out.write(g.read())
-
-        out.close()
-
-    if temporary_location is not None:
-        play_video(temporary_location)
-        if st.button("Replay", type="primary"):
-            pass
+    if temp_video_path:
+        play_video(temp_video_path)
     else:
         st.video("assets/sample.mp4")
-        st.write("Click on 'Browse Files' in the sidebar to run inference on an video.")
+        st.write("Upload a video from the sidebar to run detection.")
 
-
-if source_radio == "WEBCAM":
-    play_video(0)
+# ----------------------------
+# WEBCAM INPUT (local only)
+# ----------------------------
+elif source_radio == "WEBCAM":
+    try:
+        play_video(0)  # 0 is the default webcam
+    except:
+        st.warning("Webcam not available. Use IMAGE or VIDEO upload instead.")
