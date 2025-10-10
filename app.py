@@ -85,8 +85,5 @@ elif source_radio == "VIDEO":
 # ----------------------------
 # WEBCAM INPUT (local only)
 # ----------------------------
-elif source_radio == "WEBCAM":
-    try:
-        play_video(0)  # 0 is the default webcam
-    except:
-        st.warning("Webcam not available. Use IMAGE or VIDEO upload instead.")
+if source_radio == "WEBCAM":
+    play_video(0)  # 0 is the default webcam
