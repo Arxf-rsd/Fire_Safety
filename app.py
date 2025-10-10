@@ -3,14 +3,13 @@ import PIL
 import cv2
 import numpy as np
 import utils
-import time
-from streamlit_camera_input_live import camera_input_live
-
+import io
+from camera_input_live import camera_input_live
 # ----------------------------
 # Streamlit page config
 # ----------------------------
 st.set_page_config(
-    page_title="🔥 Fire/Smoke Detection",
+    page_title="Fire/Smoke Detection",
     page_icon="🔥",
     layout="centered",
     initial_sidebar_state="expanded"
@@ -29,14 +28,7 @@ conf_threshold = st.sidebar.slider(
 ) / 100
 
 # ----------------------------
-# Helper: Process Image
-# ----------------------------
-def process_image(uploaded_image_cv):
-    visualized_image, _ = utils.predict_image(uploaded_image_cv, conf_threshold)
-    return visualized_image
-
-# ----------------------------
-# Helper: Play video file
+# Helper function for video
 # ----------------------------
 def play_video(video_source):
     camera = cv2.VideoCapture(video_source)
@@ -51,36 +43,19 @@ def play_video(video_source):
         if not ret:
             break
 
-        frame = cv2.resize(frame, (640, 480))
-        visualized_image = process_image(frame)
+        # Predict & visualize
+        visualized_image, _ = utils.predict_image(frame, conf_threshold)
         st_frame.image(visualized_image, channels="BGR")
 
     camera.release()
 
-# ----------------------------
-# Helper: Live webcam (hybrid version)
-# ----------------------------
 def play_live_camera():
-    st_frame = st.empty()
-    st.info("🎥 Live camera active. Press **Stop Webcam** to end.")
-    stop = st.button("Stop Webcam")
-
-    while not stop:
-        image = camera_input_live()
-        if image is not None:
-            uploaded_image = PIL.Image.open(image).resize((640, 480))
-            uploaded_image_cv = cv2.cvtColor(np.array(uploaded_image), cv2.COLOR_RGB2BGR)
-
-            # Run detection
-            visualized_image = process_image(uploaded_image_cv)
-            st_frame.image(visualized_image, channels="BGR")
-
-        else:
-            st.warning("Waiting for camera feed...")
-            time.sleep(0.1)
-
-        # Check stop condition
-        stop = st.session_state.get("stop_webcam", False)
+    image = camera_input_live()
+    if image is not None:
+        uploaded_image = PIL.Image.open(image)
+        uploaded_image_cv = cv2.cvtColor(np.array(uploaded_image), cv2.COLOR_RGB2BGR)
+        visualized_image, _ = utils.predict_image(uploaded_image_cv, conf_threshold)
+        st.image(visualized_image, channels = "BGR")
 
 # ----------------------------
 # IMAGE INPUT
@@ -90,7 +65,7 @@ if source_radio == "IMAGE":
     if uploaded_file:
         uploaded_image = PIL.Image.open(uploaded_file)
         uploaded_image_cv = cv2.cvtColor(np.array(uploaded_image), cv2.COLOR_RGB2BGR)
-        visualized_image = process_image(uploaded_image_cv)
+        visualized_image, _ = utils.predict_image(uploaded_image_cv, conf_threshold)
         st.image(visualized_image, channels="BGR")
     else:
         st.image("assets/sample.jpg")
@@ -104,6 +79,7 @@ elif source_radio == "VIDEO":
     temp_video_path = None
 
     if uploaded_file:
+        # Save uploaded video to temp file
         temp_video_path = "temp_upload.mp4"
         with open(temp_video_path, "wb") as f:
             f.write(uploaded_file.read())
@@ -115,7 +91,7 @@ elif source_radio == "VIDEO":
         st.write("Upload a video from the sidebar to run detection.")
 
 # ----------------------------
-# WEBCAM INPUT
+# WEBCAM INPUT (local only)
 # ----------------------------
-elif source_radio == "WEBCAM":
-    play_live_camera()
+if source_radio == "WEBCAM":
+    play_live_camera()  # 0 is the default webcam
