@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import utils
 import io
-
+from camera_input_live import camera_input_live
 # ----------------------------
 # Streamlit page config
 # ----------------------------
