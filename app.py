@@ -1,10 +1,12 @@
 import streamlit as st
-import PIL
 import cv2
+import PIL
 import numpy as np
-import utils
-import io
+import time
+import threading
 from camera_input_live import camera_input_live
+import utils  # your fire/smoke detection utilities
+
 # ----------------------------
 # Streamlit page config
 # ----------------------------
@@ -28,34 +30,79 @@ conf_threshold = st.sidebar.slider(
 ) / 100
 
 # ----------------------------
-# Helper function for video
+# Cache the model so it loads only once
+# ----------------------------
+@st.cache_resource
+def load_model():
+    return utils.load_model() if hasattr(utils, "load_model") else None
+
+model = load_model()
+
+# ----------------------------
+# Helper class for threaded video capture
+# ----------------------------
+class VideoStream:
+    def __init__(self, source):
+        self.stream = cv2.VideoCapture(source)
+        self.ret, self.frame = self.stream.read()
+        self.stopped = False
+        self.lock = threading.Lock()
+        threading.Thread(target=self.update, daemon=True).start()
+
+    def update(self):
+        while not self.stopped:
+            ret, frame = self.stream.read()
+            if not ret:
+                self.stop()
+                return
+            with self.lock:
+                self.ret, self.frame = ret, frame
+
+    def read(self):
+        with self.lock:
+            return self.ret, self.frame
+
+    def stop(self):
+        self.stopped = True
+        self.stream.release()
+
+# ----------------------------
+# Function: play video with FPS control
 # ----------------------------
 def play_video(video_source):
-    camera = cv2.VideoCapture(video_source)
+    vs = VideoStream(video_source)
     st_frame = st.empty()
 
-    if not camera.isOpened():
-        st.error("Unable to open video source.")
-        return
+    prev_time = 0
+    fps_limit = 15  # target FPS
+    resize_dim = (640, 480)  # lower size for speed
 
     while True:
-        ret, frame = camera.read()
-        if not ret:
+        ret, frame = vs.read()
+        if not ret or frame is None:
             break
 
-        # Predict & visualize
-        visualized_image, _ = utils.predict_image(frame, conf_threshold)
-        st_frame.image(visualized_image, channels="BGR")
+        current_time = time.time()
+        if (current_time - prev_time) > 1.0 / fps_limit:
+            prev_time = current_time
 
-    camera.release()
+            frame_resized = cv2.resize(frame, resize_dim)
+            visualized_image, _ = utils.predict_image(frame_resized, conf_threshold)
+            st_frame.image(visualized_image, channels="BGR", use_container_width=True)
 
+    vs.stop()
+
+# ----------------------------
+# Function: play live camera
+# ----------------------------
 def play_live_camera():
     image = camera_input_live()
     if image is not None:
         uploaded_image = PIL.Image.open(image)
         uploaded_image_cv = cv2.cvtColor(np.array(uploaded_image), cv2.COLOR_RGB2BGR)
+        uploaded_image_cv = cv2.resize(uploaded_image_cv, (640, 480))
         visualized_image, _ = utils.predict_image(uploaded_image_cv, conf_threshold)
-        st.image(visualized_image, channels = "BGR")
+        st.image(visualized_image, channels="BGR")
 
 # ----------------------------
 # IMAGE INPUT
@@ -65,6 +112,7 @@ if source_radio == "IMAGE":
     if uploaded_file:
         uploaded_image = PIL.Image.open(uploaded_file)
         uploaded_image_cv = cv2.cvtColor(np.array(uploaded_image), cv2.COLOR_RGB2BGR)
+        uploaded_image_cv = cv2.resize(uploaded_image_cv, (640, 480))
         visualized_image, _ = utils.predict_image(uploaded_image_cv, conf_threshold)
         st.image(visualized_image, channels="BGR")
     else:
@@ -79,7 +127,6 @@ elif source_radio == "VIDEO":
     temp_video_path = None
 
     if uploaded_file:
-        # Save uploaded video to temp file
         temp_video_path = "temp_upload.mp4"
         with open(temp_video_path, "wb") as f:
             f.write(uploaded_file.read())
@@ -91,7 +138,7 @@ elif source_radio == "VIDEO":
         st.write("Upload a video from the sidebar to run detection.")
 
 # ----------------------------
-# WEBCAM INPUT (local only)
+# WEBCAM INPUT
 # ----------------------------
-if source_radio == "WEBCAM":
-    play_live_camera()  # 0 is the default webcam
+elif source_radio == "WEBCAM":
+    play_live_camera()
