@@ -83,7 +83,7 @@ def play_video(video_source):
             break
 
         current_time = time.time()
-        if (current_time - prev_time) > 1.0 / fps_limit:
+        if (current_time - prev_time) > 7.5 / fps_limit:
             prev_time = current_time
 
             frame_resized = cv2.resize(frame, resize_dim)
